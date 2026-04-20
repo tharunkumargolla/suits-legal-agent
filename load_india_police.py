@@ -1,100 +1,70 @@
-# Load Indian Police documents into Mike's RAG memory.
-print("Starting import...")
+"""Rebuild Mike's RAG memory from the 3 case_law PDFs."""
 
-try:
-    from agents.mike import Mike
-    print("Mike imported")
-except Exception as e:
-    print(f"Mike import failed: {e}")
-    exit()
+from pathlib import Path
 
-try:
-    from langchain_text_splitters import RecursiveCharacterTextSplitter
-    print("Text splitter imported")
-except Exception as e:
-    print(f"Text splitter import failed: {e}")
-    exit()
+from pypdf import PdfReader
 
-try:
-    from pypdf import PdfReader
-    print("PDF reader imported")
-except Exception as e:
-    print(f"PDF reader import failed: {e}")
-    exit()
+from agents.mike import Mike
 
-import os
+CASE_LAW_FILES = [
+    ("policeact.pdf", "The Police Act, 1861", "India"),
+    ("policemanual.pdf", "Indian Police Manual", "India"),
+    ("tenants.pdf", "NY Tenant Case Law", "New York"),
+]
 
-print("\n" + "=" * 60)
-print("MIKE ROSS - LOADING INDIAN POLICE MODULE")
-print("=" * 60)
 
-# Initialize Mike
-print("\nInitializing Mike...")
-mike = Mike()
-print("Mike initialized")
+def read_pdf_text(pdf_path: Path) -> str:
+    """Extract all text from a PDF file."""
+    reader = PdfReader(str(pdf_path))
+    pages_text = []
+    for page in reader.pages:
+        pages_text.append(page.extract_text() or "")
+    return "\n".join(pages_text)
 
-def load_pdf_to_mike(pdf_path: str, source_name: str):
-    # Extract text from PDF and load into Mike's vector memory
-    print(f"\nProcessing: {source_name}")
-    print(f"   Path: {pdf_path}")
 
-    if not os.path.exists(pdf_path):
-        print("   File not found")
-        return False
+def main() -> None:
+    print("=" * 60)
+    print("MIKE ROSS - REBUILDING CASE LAW MEMORY")
+    print("=" * 60)
 
-    reader = PdfReader(pdf_path)
-    full_text = ""
-    total_pages = len(reader.pages)
-    print(f"   Total pages: {total_pages}")
+    project_root = Path(__file__).resolve().parent
+    case_law_dir = project_root / "data" / "case_law"
 
-    for i, page in enumerate(reader.pages):
-        try:
-            text = page.extract_text() or ""
-            full_text += text
-        except Exception as e:
-            print(f"   Page {i+1} extraction failed: {e}")
-
-    print(f"   Extracted {len(full_text):,} characters")
-
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=800,
-        chunk_overlap=100
-    )
-
-    chunks = text_splitter.create_documents(
-        texts=[full_text],
-        metadatas=[{"source": source_name, "jurisdiction": "India"}]
-    )
+    mike = Mike()
 
     if mike.vectorstore is None:
-        print("   Creating new vector store...")
-        from langchain_chroma import Chroma
-        mike.vectorstore = Chroma.from_documents(
-            documents=chunks,
-            embedding=mike.embeddings,
-            persist_directory=mike.memory_path
-        )
-    else:
-        print("   Adding to existing vector store...")
-        mike.vectorstore.add_documents(chunks)
+        raise RuntimeError("Mike vectorstore did not initialize; cannot load memory.")
 
-    print(f"   Added {len(chunks)} chunks to memory")
-    return True
+    # Rebuild memory so RAG is based on only the three target PDFs.
+    print("\nClearing existing memory collection...")
+    existing = mike.vectorstore.get(include=[])
+    existing_ids = existing.get("ids", [])
+    if existing_ids:
+        mike.vectorstore.delete(ids=existing_ids)
+    print(f"Memory collection cleared. Removed {len(existing_ids)} chunks.")
 
-print("\n" + "-" * 40)
-print("LOADING INDIAN POLICE DOCUMENTS")
-print("-" * 40)
+    loaded_sources = []
+    for filename, source_name, jurisdiction in CASE_LAW_FILES:
+        pdf_path = case_law_dir / filename
+        print(f"\nLoading: {source_name}")
+        print(f"Path: {pdf_path}")
 
-load_pdf_to_mike(
-    pdf_path="./data/case_law/policeact.pdf",
-    source_name="The Police Act, 1861"
-)
+        if not pdf_path.exists():
+            raise FileNotFoundError(f"Missing required file: {pdf_path}")
 
-load_pdf_to_mike(
-    pdf_path="./data/case_law/policemanual.pdf",
-    source_name="Indian Police Manual"
-)
+        full_text = read_pdf_text(pdf_path)
+        print(f"Extracted {len(full_text):,} characters")
 
-print("\n" + "=" * 60)
-print("LOADING COMPLETE")
-print("=" * 60)
+        mike.add_to_memory(full_text, source=source_name, jurisdiction=jurisdiction)
+        loaded_sources.append({"source": source_name, "jurisdiction": jurisdiction})
+
+    final_count = mike.vectorstore._collection.count()
+    print("\n" + "=" * 60)
+    print("LOAD COMPLETE")
+    print(f"Loaded sources: {[item['source'] for item in loaded_sources]}")
+    print(f"Total chunks in memory: {final_count}")
+    print("=" * 60)
+
+
+if __name__ == "__main__":
+    main()

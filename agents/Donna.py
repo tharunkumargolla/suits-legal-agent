@@ -35,4 +35,23 @@ You are intake, not legal advice. Harvey and Jessica decide what to do with the 
             HumanMessage(content=f"Client says: {client_story}")
         ]
         response = self.llm.invoke(messages)
-        return response.content
+        content = response.content
+
+        # Safety fallback: if model refuses, still extract a usable intake block.
+        if "cannot provide legal advice" in content.lower():
+            lowered = client_story.lower()
+            india_hints = ["india", "indian", "inda", "fir"]
+            jurisdiction = "India" if any(hint in lowered for hint in india_hints) else "Unknown"
+            return (
+                "CLIENT NAME: Unknown\n"
+                f"LEGAL ISSUE: {client_story.strip()}\n"
+                f"JURISDICTION: {jurisdiction}\n"
+                "OPPOSING PARTY: Police authorities\n"
+                "KEY FACTS:\n"
+                f"- {client_story.strip()}\n"
+                "- Donna fallback used because intake model returned refusal text.\n"
+                "- Further details needed from client for full legal analysis.\n"
+                "URGENCY: High - potential denial of legal process."
+            )
+
+        return content

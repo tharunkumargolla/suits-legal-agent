@@ -1,6 +1,7 @@
 from langchain_ollama import ChatOllama
 from langchain_core.messages import HumanMessage, SystemMessage
 import os
+from pathlib import Path
 
 class Mike:
     """
@@ -22,8 +23,11 @@ class Mike:
             model_name="all-MiniLM-L6-v2"
         )
         
-        self.memory_path = "./data/mikes_brain"
+        # Resolve memory path from env/config with backward-compatible fallback.
+        self.memory_path = self._resolve_memory_path()
         os.makedirs(self.memory_path, exist_ok=True)
+        print(f"[Mike] Memory path: {self.memory_path}")
+        print(f"[Mike] Path exists: {os.path.exists(self.memory_path)}")
         
         try:
             self.vectorstore = Chroma(
@@ -31,9 +35,9 @@ class Mike:
                 embedding_function=self.embeddings
             )
             count = self.vectorstore._collection.count()
-            print(f"Mike's memory loaded: {count} documents")
+            print(f"[Mike] Memory loaded: {count} documents")
         except Exception as e:
-            print(f"No existing memory found: {e}")
+            print(f"[Mike] ERROR loading memory: {e}")
             self.vectorstore = None
         
         self.system_prompt = """You are Mike Ross. You have an eidetic memory. 
@@ -52,13 +56,59 @@ class Mike:
         - If memory has NOTHING relevant, say: "Harvey, I've got nothing in my memory on this. We need to do more research."
         - NEVER make up legal precedents - that gets people disbarred
         - Stick strictly to what the documents say"""
+
+    def _resolve_memory_path(self) -> str:
+        """
+        Resolve a stable Chroma persistence path.
+        Priority:
+        1) CHROMA_DB_PATH if provided
+        2) data/mikes_brain (current default)
+        3) data/mike_brain (legacy fallback if it already has data)
+        """
+        project_root = Path(__file__).resolve().parent.parent
+        env_path = os.getenv("CHROMA_DB_PATH", "").strip()
+
+        if env_path:
+            configured_path = Path(env_path)
+            if not configured_path.is_absolute():
+                configured_path = project_root / configured_path
+            return str(configured_path.resolve())
+
+        current_default = project_root / "data" / "mikes_brain"
+        legacy_default = project_root / "data" / "mike_brain"
+        current_has_db = (current_default / "chroma.sqlite3").exists()
+        legacy_has_db = (legacy_default / "chroma.sqlite3").exists()
+
+        # If the current folder is empty and legacy has DB, auto-reuse legacy data.
+        if not current_has_db and legacy_has_db:
+            print(f"[Mike] Using legacy memory path: {legacy_default}")
+            return str(legacy_default.resolve())
+
+        return str(current_default.resolve())
+
+    def _detect_jurisdiction(self, query: str, facts: str) -> str:
+        """Infer jurisdiction from both client query and Donna facts."""
+        combined = f"{query} {facts}".lower()
+        india_terms = [
+            "india",
+            "indian",
+            "inda",
+            "delhi",
+            "mumbai",
+            "bangalore",
+            "police act",
+            "fir",
+        ]
+        if any(term in combined for term in india_terms):
+            return "India"
+        return "New York"
     
     def research(self, query: str, facts: str = "") -> str:
         """
         Mike searches his memory (RAG) then analyzes
         """
-        # Detect jurisdiction from facts
-        jurisdiction = "India" if "india" in facts.lower() else "New York"
+        # Detect jurisdiction from user query + facts (Donna may omit location).
+        jurisdiction = self._detect_jurisdiction(query, facts)
         
         # Add jurisdiction to search query
         search_query = f"{query} {jurisdiction} law"
@@ -69,7 +119,15 @@ class Mike:
         
         if self.vectorstore:
             try:
-                docs = self.vectorstore.similarity_search(search_query, k=5)
+                # First pass: jurisdiction-filtered retrieval.
+                docs = self.vectorstore.similarity_search(
+                    search_query,
+                    k=5,
+                    filter={"jurisdiction": jurisdiction}
+                )
+                # Fallback for older chunks that may not have jurisdiction metadata.
+                if not docs:
+                    docs = self.vectorstore.similarity_search(search_query, k=5)
                 if docs and len(docs) > 0:
                     has_results = True
                     memory_results = f"CASES FROM MY MEMORY ({jurisdiction.upper()} JURISDICTION):\n"
@@ -103,6 +161,7 @@ INSTRUCTIONS:
 4. Do NOT invent any case names or statute numbers not in the memory
 5. If the memory items don't address the question, say so honestly
 6. Focus on {jurisdiction.upper()} law only
+7. IMPORTANT: Since memory items were found, DO NOT say "I've got nothing in my memory"
 
 Based STRICTLY on my memory items above, here's what I found:
 """
@@ -129,11 +188,15 @@ Do NOT make up any cases or statutes. Just be honest about the gap.
         response = self.llm.invoke(messages)
         return response.content
     
-    def add_to_memory(self, text: str, source: str = "unknown"):
+    def add_to_memory(self, text: str, source: str = "unknown", jurisdiction: str = "Unknown"):
         """
         Mike reads a new document and adds it to his memory
         """
         from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+        if not text or not text.strip():
+            print(f"[Mike] Skipping empty memory input from source: {source}")
+            return
 
         text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=500,
@@ -142,7 +205,7 @@ Do NOT make up any cases or statutes. Just be honest about the gap.
         
         chunks = text_splitter.create_documents(
             texts=[text],
-            metadatas=[{"source": source}]
+            metadatas=[{"source": source, "jurisdiction": jurisdiction}]
         )
         
         if self.vectorstore is None:
@@ -156,3 +219,9 @@ Do NOT make up any cases or statutes. Just be honest about the gap.
         else:
             self.vectorstore.add_documents(chunks)
             print(f"Added {len(chunks)} chunks to memory")
+
+        try:
+            count = self.vectorstore._collection.count()
+            print(f"[Mike] Memory now has {count} documents")
+        except Exception as e:
+            print(f"[Mike] Could not verify memory count after write: {e}")
