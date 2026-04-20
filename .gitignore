@@ -1,0 +1,132 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv
+.env.local
+.env.*.local
+
+# Environment variables
+.env
+.env.development
+.env.production
+.env.test
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+.project
+.pydevproject
+.settings/
+*.sublime-project
+*.sublime-workspace
+
+# Streamlit
+.streamlit/
+.streamlit/secrets.toml
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# Data and databases
+data/
+*.db
+*.sqlite
+*.sqlite3
+chroma.sqlite3
+
+# Chroma vectorstore
+mikes_brain/
+mike_brain/
+embeddings/
+*.chroma
+
+# Logs and temporary files
+*.log
+logs/
+tmp/
+temp/
+*.tmp
+
+# OS-specific
+Thumbs.db
+.AppleDouble
+.LSOverride
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+
+# IDE specific
+.pylintrc
+.flake8
+pyproject.toml.local
+
+# Cache
+.cache/
+*.cache
+
+# Coverage
+htmlcov/
+.coverage
+.coverage.*
+.pytest_cache/
+
+# Mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Secrets and credentials
+secrets.json
+config.local.json
+*.pem
+*.key
+*.crt
+
+# Build artifacts
+dist/
+build/
+*.whl
+
+# Node (if using any node tools)
+node_modules/
+npm-debug.log
+
+# Package manager lock files (optional - uncomment to include)
+# Pipfile.lock
+# poetry.lock
+
+# Local testing files
+test_results/
+test_output/
+debug_output/
