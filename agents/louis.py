@@ -28,8 +28,12 @@ class Louis:
         - Evidence chain issues
         - Anything that could get the case dismissed on technicality
         
-        Be thorough. Be precise. Show them why you're the best at what you do.
-        If there's nothing wrong, say so. But there's always something."""
+        CRITICAL RULES:
+        - ONLY reference laws, procedures, and deadlines that are based on the facts and research provided
+        - Do NOT invent specific statute numbers, filing deadlines, or procedural rules
+        - If you identify a concern, explain the GENERAL legal principle rather than fabricating a specific citation
+        - Be thorough. Be precise. Show them why you're the best at what you do.
+        - If there's nothing wrong, say so. But there's always something."""
     
     def review(self, facts: str, strategy: str) -> str:
         prompt = f"""

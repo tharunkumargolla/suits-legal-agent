@@ -11,7 +11,7 @@ class Mike:
     def __init__(self):
         self.llm = ChatOllama(
             model="llama3.2:3b",
-            temperature=0.5,
+            temperature=0.2,  # Low temperature for factual accuracy
             base_url="http://localhost:11434"
         )
         
@@ -30,7 +30,8 @@ class Mike:
                 persist_directory=self.memory_path,
                 embedding_function=self.embeddings
             )
-            print("Mike's memory loaded")
+            count = self.vectorstore._collection.count()
+            print(f"Mike's memory loaded: {count} documents")
         except Exception as e:
             print(f"No existing memory found: {e}")
             self.vectorstore = None
@@ -42,14 +43,15 @@ class Mike:
         Harvey depends on you to find the precedent, the loophole, the one case 
         that changes everything.
         
-        When given research, speak like Mike:
-        - You MUST quote directly from the memory items provided
-        - Reference specific cases and statutes found in your memory
-        - Be confident in your recall
-        - Explain why this matters to Harvey's strategy
-        - Do NOT make up case names - only use what's in memory
-        - Stick to the jurisdiction mentioned in the facts
-        - If memory has nothing relevant, say so honestly"""
+        CRITICAL RULES:
+        - You MUST ONLY cite information that appears in the MEMORY ITEMS below
+        - Quote DIRECTLY from the memory items - use exact text
+        - Reference specific case names, statute sections, or legal principles ONLY if they appear in memory
+        - Do NOT invent or fabricate any case names, statute numbers, or legal citations
+        - Do NOT cite laws or cases from other jurisdictions unless they appear in memory
+        - If memory has NOTHING relevant, say: "Harvey, I've got nothing in my memory on this. We need to do more research."
+        - NEVER make up legal precedents - that gets people disbarred
+        - Stick strictly to what the documents say"""
     
     def research(self, query: str, facts: str = "") -> str:
         """
@@ -63,39 +65,61 @@ class Mike:
         
         # Step 1: Search the memory
         memory_results = ""
+        has_results = False
         
         if self.vectorstore:
             try:
-                docs = self.vectorstore.similarity_search(search_query, k=3)
+                docs = self.vectorstore.similarity_search(search_query, k=5)
                 if docs and len(docs) > 0:
-                    memory_results = f"CASES FROM MY MEMORY ({jurisdiction.upper()} JURISDICTION - YOU MUST CITE THESE):\n"
+                    has_results = True
+                    memory_results = f"CASES FROM MY MEMORY ({jurisdiction.upper()} JURISDICTION):\n"
+                    memory_results += "=" * 60 + "\n"
                     for i, doc in enumerate(docs, 1):
-                        memory_results += f"\n--- MEMORY ITEM {i} ---\n"
-                        memory_results += doc.page_content[:800]
-                        memory_results += "\n"
+                        source = doc.metadata.get('source', 'Unknown')
+                        memory_results += f"\n--- MEMORY ITEM {i} (Source: {source}) ---\n"
+                        memory_results += doc.page_content[:1200]  # More context per doc
+                        memory_results += "\n" + "-" * 40 + "\n"
+                    memory_results += "=" * 60 + "\n"
             except Exception as e:
                 memory_results = f"(Memory search error: {e})\n"
         else:
             memory_results = f"No {jurisdiction} law memory loaded yet."
         
         # Step 2: Mike analyzes with forced memory usage
-        prompt = f"""
-        Research Request: {query}
-        
-        Facts from Donna: {facts}
-        
-        Jurisdiction: {jurisdiction}
-        
-        {memory_results}
-        
-        IMPORTANT: You are researching {jurisdiction.upper()} LAW ONLY.
-        - You MUST quote directly from the memory items above
-        - Mention specific case names or statute sections found in the memory
-        - Do NOT cite laws from other jurisdictions
-        - If memory has nothing relevant, say so honestly
-        
-        Based on my memory of {jurisdiction} law, here's what I found:
-        """
+        if has_results:
+            prompt = f"""
+Research Request: {query}
+
+Facts from Donna: {facts}
+
+Jurisdiction: {jurisdiction}
+
+{memory_results}
+
+INSTRUCTIONS:
+1. ONLY use information from the MEMORY ITEMS above
+2. Quote directly from the memory items using exact text
+3. Cite the source shown in parentheses for each memory item
+4. Do NOT invent any case names or statute numbers not in the memory
+5. If the memory items don't address the question, say so honestly
+6. Focus on {jurisdiction.upper()} law only
+
+Based STRICTLY on my memory items above, here's what I found:
+"""
+        else:
+            prompt = f"""
+Research Request: {query}
+
+Facts from Donna: {facts}
+
+Jurisdiction: {jurisdiction}
+
+I searched my memory and found NO relevant documents for this query.
+
+Tell Harvey honestly: "I've got nothing in my memory on this specific issue. 
+We need to get more case law loaded before I can give you solid precedent."
+Do NOT make up any cases or statutes. Just be honest about the gap.
+"""
         
         messages = [
             SystemMessage(content=self.system_prompt),
@@ -122,6 +146,7 @@ class Mike:
         )
         
         if self.vectorstore is None:
+            from langchain_chroma import Chroma
             self.vectorstore = Chroma.from_documents(
                 documents=chunks,
                 embedding=self.embeddings,

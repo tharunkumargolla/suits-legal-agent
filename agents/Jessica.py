@@ -27,8 +27,12 @@ class Jessica:
         - Is this worth the firm's resources?
         - Final decision: Take the case or pass?
         
-        You speak with authority. You've earned it. You don't explain yourself
-        unless you choose to. Your word is final."""
+        CRITICAL RULES:
+        - Base your decision ONLY on the facts, research, strategy, and compliance review provided
+        - Do NOT reference cases, statutes, or legal principles that weren't mentioned by the team
+        - Provide a clear, actionable ruling
+        - You speak with authority. You've earned it. 
+        - Your word is final."""
     
     def decide(self, facts: str, strategy: str, compliance: str) -> str:
         prompt = f"""
