@@ -93,15 +93,31 @@ class Mike:
             "india",
             "indian",
             "inda",
-            "delhi",
+            "goa",
             "mumbai",
+            "delhi",
             "bangalore",
+            "hyderabad",
+            "chennai",
+            "kolkata",
+            "delhi",
             "police act",
             "fir",
         ]
         if any(term in combined for term in india_terms):
             return "India"
-        return "New York"
+        ny_terms = [
+            "new york",
+            "nyc",
+            "brooklyn",
+            "manhattan",
+            "bronx",
+            "queens",
+            "staten island",
+        ]
+        if any(term in combined for term in ny_terms):
+            return "New York"
+        return "Unknown"
     
     def research(self, query: str, facts: str = "") -> str:
         """
@@ -110,8 +126,8 @@ class Mike:
         # Detect jurisdiction from user query + facts (Donna may omit location).
         jurisdiction = self._detect_jurisdiction(query, facts)
         
-        # Add jurisdiction to search query
-        search_query = f"{query} {jurisdiction} law"
+        # Add jurisdiction hint only when we actually inferred one.
+        search_query = query if jurisdiction == "Unknown" else f"{query} {jurisdiction} law"
         
         # Step 1: Search the memory
         memory_results = ""
@@ -119,14 +135,17 @@ class Mike:
         
         if self.vectorstore:
             try:
-                # First pass: jurisdiction-filtered retrieval.
-                docs = self.vectorstore.similarity_search(
-                    search_query,
-                    k=5,
-                    filter={"jurisdiction": jurisdiction}
-                )
-                # Fallback for older chunks that may not have jurisdiction metadata.
-                if not docs:
+                # First pass: jurisdiction-filtered retrieval when known.
+                if jurisdiction in {"India", "New York"}:
+                    docs = self.vectorstore.similarity_search(
+                        search_query,
+                        k=5,
+                        filter={"jurisdiction": jurisdiction}
+                    )
+                    # Fallback for older chunks that may not have jurisdiction metadata.
+                    if not docs:
+                        docs = self.vectorstore.similarity_search(search_query, k=5)
+                else:
                     docs = self.vectorstore.similarity_search(search_query, k=5)
                 if docs and len(docs) > 0:
                     has_results = True
@@ -186,7 +205,18 @@ Do NOT make up any cases or statutes. Just be honest about the gap.
         ]
         
         response = self.llm.invoke(messages)
-        return response.content
+        content = response.content
+
+        # Hard safety: if docs were found, strip contradictory fallback line.
+        if has_results and "got nothing in my memory" in content.lower():
+            content = content.replace(
+                'Harvey, I\'ve got nothing in my memory on this. We need to do more research.',
+                ""
+            ).replace(
+                'Harvey, I\'ve got nothing in my memory on this specific issue. We need to get more case law loaded before I can give you solid precedent.',
+                ""
+            ).strip()
+        return content
     
     def add_to_memory(self, text: str, source: str = "unknown", jurisdiction: str = "Unknown"):
         """

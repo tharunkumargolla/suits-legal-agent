@@ -27,7 +27,7 @@ load_dotenv()
 
 # Page configuration
 st.set_page_config(
-    page_title="Pearson Specter",
+    page_title="Pearson Specter Tharun",
     page_icon="⚖️",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -250,7 +250,7 @@ class PearsonSpecterUI:
     def render_sidebar(self):
         """Render the sidebar with firm information"""
         with st.sidebar:
-            st.markdown("## ⚖️ PEARSON SPECTER")
+            st.markdown("## ⚖️ PEARSON SPECTER THARUN")
             st.markdown("*New York's Finest*")
             st.markdown("---")
             
@@ -287,7 +287,7 @@ class PearsonSpecterUI:
         """Main UI loop"""
         
         # Header
-        st.markdown('<div class="main-header">⚖️ PEARSON SPECTER</div>', unsafe_allow_html=True)
+        st.markdown('<div class="main-header">⚖️ PEARSON SPECTER THARUN</div>', unsafe_allow_html=True)
         
         # Render sidebar
         self.render_sidebar()
