@@ -15,7 +15,7 @@ Multi-agent legal consultation app inspired by *Suits*, built with LangChain + L
 
 ## Tech Stack
 
-- Python 3.13
+- Python 
 - Streamlit
 - LangChain / LangGraph
 - Ollama (`llama3.2:3b`)
